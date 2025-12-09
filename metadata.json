@@ -1,0 +1,8 @@
+{
+  "name": "MoodParticle AI",
+  "description": "An immersive audio-visual experience where your emotions and favorite colors generate unique ambient soundscapes and reactive 3D particle fields, controllable via hand gestures.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
