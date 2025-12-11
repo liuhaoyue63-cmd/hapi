@@ -96,10 +96,12 @@ const getTargetPosition = (i: number, count: number, shape: ParticleShape) => {
 };
 
 const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
-  const count = 4000;
+  // REDUCED COUNT FOR PERFORMANCE
+  const count = 1500;
   const mesh = useRef<THREE.InstancedMesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
   const handLightRef = useRef<THREE.PointLight>(null);
+  const prevHandPos = useRef<{x: number, y: number} | null>(null);
   
   const dummy = useMemo(() => new THREE.Object3D(), []);
   
@@ -130,6 +132,8 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
     const colors = songData.visualParams.colorPalette.map(c => new THREE.Color(c));
     for (let i = 0; i < count; i++) {
       const color = colors[Math.floor(Math.random() * colors.length)];
+      // BOOST COLOR BRIGHTNESS
+      color.multiplyScalar(1.5); 
       color.toArray(colorArray, i * 3);
     }
     mesh.current.geometry.attributes.color.needsUpdate = true;
@@ -148,6 +152,15 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
     const handX = handPosition.x * 30;
     const handY = handPosition.y * 20;
     const isHandActive = handPosition.isDetected;
+
+    // Calculate Hand Velocity
+    let handVx = 0;
+    let handVy = 0;
+    if (isHandActive && prevHandPos.current) {
+        handVx = (handX - prevHandPos.current.x) * 5; // Multiplier for sensitivity
+        handVy = (handY - prevHandPos.current.y) * 5;
+    }
+    prevHandPos.current = isHandActive ? { x: handX, y: handY } : null;
 
     if (handLightRef.current) {
         handLightRef.current.position.set(handX, handY, 5);
@@ -169,26 +182,26 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
         // 1. Ambient Noise (Breathing)
         particle.t += speed * (0.005 + bass * 0.05);
         
-        // Vary noise intensity based on shape (Fish swims, Cat breathes)
+        // Vary noise intensity based on shape
         let noiseScale = chaos;
-        if (shape === 'cat') noiseScale *= 0.5; // Stabler cat
-        if (shape === 'fish') noiseScale *= 1.5; // Moving fish
+        if (shape === 'cat') noiseScale *= 0.5; 
+        if (shape === 'fish') noiseScale *= 1.5;
 
         const noiseX = simpleNoise(particle.t, particle.baseZ * 0.1, particle.baseX * 0.1) * noiseScale * 5;
         const noiseY = simpleNoise(particle.baseY * 0.1, particle.t, particle.baseZ * 0.1) * noiseScale * 5;
         const noiseZ = simpleNoise(particle.baseZ * 0.1, particle.baseX * 0.1, particle.t) * noiseScale * 5;
 
-        // Current target is the Morphed Base + Noise
         const currentTargetX = particle.baseX + noiseX;
         const currentTargetY = particle.baseY + noiseY;
         const currentTargetZ = particle.baseZ + noiseZ;
 
-        // 2. Hand Interaction (Vortex/Touch)
+        // 2. Hand Interaction (COMPLEX FLUIDITY)
         if (isHandActive) {
             const dx = particle.x - handX;
             const dy = particle.y - handY;
             const dz = particle.z - 0;
-            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            const distSq = dx*dx + dy*dy + dz*dz;
+            const dist = Math.sqrt(distSq);
             
             // Interaction Radius
             const radius = 25;
@@ -197,36 +210,50 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
                 const influence = (1 - dist / radius);
                 const power = influence * influence;
 
-                // Special Interaction based on Shape
+                // A. DRAG / INERTIA (Particles follow hand movement)
+                particle.vx += handVx * influence * 0.2;
+                particle.vy += handVy * influence * 0.2;
+
+                // B. SHAPE-SPECIFIC INTERACTION
                 if (shape === 'cat' && dist < 8) {
-                    // "Touch the cat" - Gentle attraction/purring vibration
-                    particle.vx -= dx * 0.05 * power;
-                    particle.vy -= dy * 0.05 * power;
-                    particle.vz -= dz * 0.05 * power;
-                    particle.vx += (Math.random() - 0.5) * 0.5 * power; // Purr jitter
+                     // Sparkles on touch
+                     particle.vx += (Math.random() - 0.5) * power;
+                     particle.vy += (Math.random() - 0.5) * power;
+                     // Gentle pull
+                     particle.vx -= dx * 0.05 * power;
+                     particle.vy -= dy * 0.05 * power;
                 } else if (shape === 'flower') {
-                    // "Control the flower" - Strong wind/push
+                    // Wind effect
                     particle.vx += dx * 0.1 * power;
                     particle.vy += dy * 0.1 * power;
+                    particle.vz += Math.sin(time * 5 + dist) * 0.1 * power;
                 } else {
-                    // Default Vortex for Fish/Others
-                    const swirlSpeed = 0.8 * power;
-                    particle.vx += (-dy * swirlSpeed * 0.1); 
-                    particle.vy += (dx * swirlSpeed * 0.1);
-                    const suction = 0.5 * power;
-                    particle.vx -= (dx * suction * 0.1);
-                    particle.vy -= (dy * suction * 0.1);
-                    particle.vz -= (dz * suction * 0.1);
+                    // C. COMPLEX VORTEX (Default)
+                    // Tangential Force (Spin)
+                    particle.vx += (-dy * 0.05 * power); 
+                    particle.vy += (dx * 0.05 * power);
+                    
+                    // Centripetal Force (Attract) - slightly weaker now to allow drag to work
+                    particle.vx -= (dx * 0.02 * power);
+                    particle.vy -= (dy * 0.02 * power);
+                    particle.vz -= (dz * 0.02 * power);
+
+                    // Random Jitter (Sparkle effect)
+                    if (Math.random() > 0.9) {
+                        particle.vx += (Math.random() - 0.5) * 0.5 * power;
+                        particle.vy += (Math.random() - 0.5) * 0.5 * power;
+                        particle.vz += (Math.random() - 0.5) * 0.5 * power;
+                    }
                 }
             }
         }
 
         // Physics Integration
-        particle.vx *= 0.92; // Friction
-        particle.vy *= 0.92;
-        particle.vz *= 0.92;
+        particle.vx *= 0.94; // Less friction for more fluid feel
+        particle.vy *= 0.94;
+        particle.vz *= 0.94;
 
-        const springStrength = isHandActive ? 0.01 : 0.05;
+        const springStrength = isHandActive ? 0.005 : 0.05; // Looser spring when hand is active
         particle.vx += (currentTargetX - particle.x) * springStrength;
         particle.vy += (currentTargetY - particle.y) * springStrength;
         particle.vz += (currentTargetZ - particle.z) * springStrength;
@@ -246,8 +273,8 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
         dummy.scale.set(finalScale, finalScale, finalScale);
         
         // Dynamic Rotation
-        dummy.rotation.x += particle.vy * 0.1;
-        dummy.rotation.y += particle.vx * 0.1;
+        dummy.rotation.x += particle.vy * 0.2;
+        dummy.rotation.y += particle.vx * 0.2;
         
         dummy.updateMatrix();
         mesh.current!.setMatrixAt(i, dummy.matrix);
@@ -279,13 +306,17 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
         <dodecahedronGeometry args={[0.2, 0]}>
           <instancedBufferAttribute attach="attributes-color" args={[colorArray, 3]} />
         </dodecahedronGeometry>
+        {/* ENHANCED MATERIAL FOR VIBRANCY */}
         <meshStandardMaterial 
           vertexColors 
           transparent 
-          opacity={0.9} 
-          roughness={0.2} 
-          metalness={0.9}
+          opacity={1} 
+          roughness={0} 
+          metalness={1}
+          emissive="#222222" // Add base glow
+          emissiveIntensity={0.5}
           blending={THREE.AdditiveBlending}
+          toneMapped={false} // CRITICAL FOR NEON COLORS
         />
       </instancedMesh>
     </>
@@ -295,8 +326,8 @@ const Particles: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
 const ParticleScene: React.FC<ParticlesProps> = ({ songData, handPosition }) => {
   return (
     <div className="absolute inset-0 z-0 bg-black">
-      <Canvas camera={{ position: [0, 0, 35], fov: 60 }} gl={{ antialias: false }}>
-        <color attach="background" args={['#050505']} />
+      <Canvas camera={{ position: [0, 0, 35], fov: 60 }} gl={{ antialias: false, powerPreference: "high-performance" }}>
+        <color attach="background" args={['#020202']} />
         <ambientLight intensity={0.2} />
         <Environment preset="night" />
         <Particles songData={songData} handPosition={handPosition} />

@@ -25,7 +25,7 @@ const songSchema: Schema = {
         colorPalette: {
           type: Type.ARRAY,
           items: { type: Type.STRING },
-          description: "Array of 3 hex color codes matching the mood and user preference"
+          description: "Array of 3 hex color codes. MUST be NEON, VIBRANT, and GLOWING colors."
         },
         shape: {
           type: Type.STRING,
@@ -49,7 +49,7 @@ export const generateSongFromMood = async (mood: string, color: string): Promise
     - Focus on harmony and emotion.
     
     Visual Requirements:
-    - Colors should blend the user's favorite color with emotional tones.
+    - Colors: generate HIGH SATURATION, NEON, and GLOWING colors. Avoid dull or dark colors.
     - Chaos should be lower for calm moods, higher for angry/intense moods.
     
     CRITICAL SHAPE RULES:
@@ -89,7 +89,7 @@ export const generateSongFromMood = async (mood: string, color: string): Promise
         chaos: 0.1,
         speed: 0.5,
         size: 1,
-        colorPalette: ["#ffffff", "#888888", "#000000"],
+        colorPalette: ["#00ffff", "#ff00ff", "#ffffff"],
         shape: 'sphere'
       }
     };
